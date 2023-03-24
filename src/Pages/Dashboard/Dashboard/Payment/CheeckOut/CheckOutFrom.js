@@ -1,13 +1,16 @@
 import { CardElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import React, { useEffect, useState } from "react";
 
-const CheckOutFrom = ({ bookings }) => {
-  const [cardError, setCardError] = useState(" ");
-  const stripe = useStripe();
+const CheckOutFrom = ({ booking }) => {
+  const [cardError, setCardError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [processing, setProcessing] = useState(false);
+  const [transactionId, setTransactionId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
 
+  const stripe = useStripe();
   const elements = useElements();
-  const { price } = bookings;
+  const { price, email, patient, _id } = booking;
 
   useEffect(() => {
     // Create PaymentIntent as soon as the page loads
@@ -27,31 +30,73 @@ const CheckOutFrom = ({ bookings }) => {
     event.preventDefault();
 
     if (!stripe || !elements) {
-      // Stripe.js has not loaded yet. Make sure to disable
-      // form submission until Stripe.js has loaded.
       return;
     }
-    // Get a reference to a mounted CardElement. Elements knows how
-    // to find your CardElement because there can only ever be one of
-    // each type of element.
+
     const card = elements.getElement(CardElement);
-
-    if (card == null) {
+    if (card === null) {
       return;
     }
 
-    // Use your card Element with other Stripe.js APIs
     const { error, paymentMethod } = await stripe.createPaymentMethod({
       type: "card",
       card,
     });
+
     if (error) {
       console.log(error);
       setCardError(error.message);
     } else {
-      setCardError(" ");
+      setCardError("");
     }
+    setSuccess("");
+    setProcessing(true);
+    const { paymentIntent, error: confirmError } =
+      await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: card,
+          billing_details: {
+            name: patient,
+            email: email,
+          },
+        },
+      });
+
+    if (confirmError) {
+      setCardError(confirmError.message);
+      return;
+    }
+    console.log("error", paymentIntent);
+
+    if (paymentIntent.status === "succeeded") {
+      console.log("card info", card);
+      // store payment info in the database
+      const payment = {
+        price,
+        transactionId: paymentIntent.id,
+        email,
+        bookingId: _id,
+      };
+      fetch("http://localhost:5000/payments", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `bearer ${localStorage.getItem("accessToken")}`,
+        },
+        body: JSON.stringify(payment),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          console.log(data);
+          if (data.insertedId) {
+            setSuccess("Congrats! your payment completed");
+            setTransactionId(paymentIntent.id);
+          }
+        });
+    }
+    setProcessing(false);
   };
+
   return (
     <>
       <form onSubmit={handleSubmit}>
@@ -72,16 +117,24 @@ const CheckOutFrom = ({ bookings }) => {
           }}
         />
         <button
-          className="btn btn-sm btn-primary mt-4"
-          type="submit "
-          disabled={!stripe || !clientSecret}
+          className="btn btn-sm mt-4 btn-primary"
+          type="submit"
+          disabled={!stripe || !clientSecret || processing}
         >
           Pay
         </button>
       </form>
       <p className="text-red-500">{cardError}</p>
+      {success && (
+        <div>
+          <p className="text-green-500">{success}</p>
+          <p>
+            Your transactionId:{" "}
+            <span className="font-bold">{transactionId}</span>
+          </p>
+        </div>
+      )}
     </>
   );
 };
-
 export default CheckOutFrom;

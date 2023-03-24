@@ -6,20 +6,22 @@ import CheckOutFrom from "./CheeckOut/CheckOutFrom";
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PK);
 console.log("payment stripe", stripePromise);
 const Payment = () => {
-  const bookings = useLoaderData();
-  const { treatment, price, appointmentDate, slot } = bookings;
-  console.log("payment taka and mama", bookings);
+  const booking = useLoaderData();
+  // const navigation = useNavigation();
+  const { treatment, price, appointmentDate, slot } = booking;
+  // if(navigation.state === "loading"){
+  //     return <Loading></Loading>
+  // }
   return (
     <div>
-      <h3 className="text-4xl text-primary ">payment for {treatment}</h3>
+      <h3 className="text-3xl">Payment for {treatment}</h3>
       <p className="text-xl">
-        {" "}
-        please pay <strong>${price}</strong>for your appointment{" "}
-        {appointmentDate} at {slot}{" "}
+        Please pay <strong>${price}</strong> for your appointment on{" "}
+        {appointmentDate} at {slot}
       </p>
       <div className="w-96 my-12">
         <Elements stripe={stripePromise}>
-          <CheckOutFrom bookings={bookings} />
+          <CheckOutFrom booking={booking} />
         </Elements>
       </div>
     </div>
